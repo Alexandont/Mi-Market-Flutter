@@ -5,12 +5,14 @@ import '../models/carrito_provider.dart';
 import '../widgets/imagen_producto_offline.dart';
 import '../models/producto_model.dart';
 import '../repositories/producto_repository.dart';
+import '../preferences/preferencias_locales.dart';
+import '../viewmodels/catalogo_view_model.dart';
 
 /// Catalogo de productos.
 ///
-/// Usa un [StreamBuilder] sobre Firestore, asi que la lista se actualiza sola
-/// cuando alguien agrega o cambia un producto, sin recargar la pantalla.
-/// El filtro por texto y por categoria se aplica en memoria sobre esa lista.
+/// Usa un CatalogoViewModel reactivo; el repositorio escucha los cambios
+/// y la vista se limita a presentar el estado.
+/// Los filtros y errores se administran en el ViewModel.
 class ListaProductosScreen extends StatefulWidget {
   const ListaProductosScreen({super.key});
 
@@ -20,36 +22,40 @@ class ListaProductosScreen extends StatefulWidget {
 
 class _ListaProductosScreenState extends State<ListaProductosScreen> {
   final _productos = ProductoRepository();
+  final _preferencias = PreferenciasCatalogo();
+  late final CatalogoViewModel _vm;
   final _carrito = CarritoProvider();
   final _busqueda = TextEditingController();
-
-  String _texto = '';
-  String _categoria = 'Todas';
-  late Stream<List<ProductoModel>> _flujoCatalogo;
 
   @override
   void initState() {
     super.initState();
-    _flujoCatalogo = _productos.escucharProductos();
+    final uid = FirebaseAuthManager().uidActual;
+    _vm = CatalogoViewModel(
+      observarProductos: _productos.escucharProductos,
+      eliminarProducto: _productos.eliminarProducto,
+      puedeEditar: _productos.puedeEditar,
+      cargarCategoria: uid.isEmpty
+          ? null
+          : () => _preferencias.leerCategoria(uid),
+      guardarCategoria: uid.isEmpty
+          ? null
+          : (valor) => _preferencias.guardarCategoria(uid, valor),
+    );
+    _vm.iniciar();
+    _vm.addListener(_actualizarUi);
+  }
+
+  void _actualizarUi() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _vm.removeListener(_actualizarUi);
+    _vm.dispose();
     _busqueda.dispose();
     super.dispose();
-  }
-
-  List<ProductoModel> _filtrar(List<ProductoModel> lista) {
-    final texto = _texto.toLowerCase().trim();
-    return lista.where((p) {
-      final coincideCategoria =
-          _categoria == 'Todas' || p.categoria == _categoria;
-      final coincideTexto =
-          texto.isEmpty ||
-          p.nombre.toLowerCase().contains(texto) ||
-          p.descripcion.toLowerCase().contains(texto);
-      return coincideCategoria && coincideTexto;
-    }).toList();
   }
 
   void _agregarAlCarrito(ProductoModel producto) {
@@ -90,7 +96,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
 
     if (confirmado != true) return;
 
-    final respuesta = await _productos.eliminarProducto(producto);
+    final respuesta = await _vm.eliminar(producto);
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -145,7 +151,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
             '/registro_producto',
           );
           if (mounted && creado == true) {
-            setState(() => _flujoCatalogo = _productos.escucharProductos());
+            _vm.recargar();
           }
         },
         icon: const Icon(Icons.add),
@@ -163,17 +169,17 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
                   decoration: InputDecoration(
                     hintText: 'Buscar producto',
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _texto.isEmpty
+                    suffixIcon: _vm.texto.isEmpty
                         ? null
                         : IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _busqueda.clear();
-                              setState(() => _texto = '');
+                              _vm.cambiarTexto('');
                             },
                           ),
                   ),
-                  onChanged: (valor) => setState(() => _texto = valor),
+                  onChanged: _vm.cambiarTexto,
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -186,9 +192,8 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
                       final categoria = categorias[indice];
                       return ChoiceChip(
                         label: Text(categoria),
-                        selected: _categoria == categoria,
-                        onSelected: (_) =>
-                            setState(() => _categoria = categoria),
+                        selected: _vm.categoria == categoria,
+                        onSelected: (_) => _vm.cambiarCategoria(categoria),
                       );
                     },
                   ),
@@ -198,30 +203,29 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
           ),
 
           Expanded(
-            child: StreamBuilder<List<ProductoModel>>(
-              stream: _flujoCatalogo,
-              builder: (contexto, instantanea) {
-                if (instantanea.connectionState == ConnectionState.waiting) {
+            child: Builder(
+              builder: (contexto) {
+                if (_vm.cargando) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (instantanea.hasError) {
+                if (_vm.error != null) {
                   return _Aviso(
                     icono: Icons.cloud_off,
                     titulo: 'No se pudo cargar el catalogo',
-                    detalle: '${instantanea.error}',
+                    detalle: '${_vm.error}',
                   );
                 }
 
-                final lista = _filtrar(instantanea.data ?? const []);
+                final lista = _vm.visibles;
 
                 if (lista.isEmpty) {
                   return _Aviso(
                     icono: Icons.inventory_2_outlined,
-                    titulo: _texto.isEmpty && _categoria == 'Todas'
+                    titulo: _vm.texto.isEmpty && _vm.categoria == 'Todas'
                         ? 'Todavia no hay productos'
                         : 'Sin resultados',
-                    detalle: _texto.isEmpty && _categoria == 'Todas'
+                    detalle: _vm.texto.isEmpty && _vm.categoria == 'Todas'
                         ? 'Pulse el boton Nuevo para registrar el primero'
                         : 'Pruebe con otro texto o categoria',
                   );
@@ -234,7 +238,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
                     final producto = lista[indice];
                     return _TarjetaProducto(
                       producto: producto,
-                      puedeEditar: _productos.puedeEditar(producto),
+                      puedeEditar: _vm.puedeEditar(producto),
                       onAgregar: producto.hayStock
                           ? () => _agregarAlCarrito(producto)
                           : null,
