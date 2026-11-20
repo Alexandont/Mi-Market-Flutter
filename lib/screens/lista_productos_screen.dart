@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../firebase/firebase_auth_manager.dart';
 import '../models/carrito_provider.dart';
+import '../widgets/imagen_producto_offline.dart';
 import '../models/producto_model.dart';
 import '../repositories/producto_repository.dart';
 
@@ -269,23 +271,11 @@ class _TarjetaProducto extends StatelessWidget {
               child: SizedBox(
                 width: 72,
                 height: 72,
-                child: producto.imagenUrl.isEmpty
-                    ? Container(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        child: const Icon(Icons.image_not_supported_outlined),
-                      )
-                    : Image.network(
-                        producto.imagenUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          child: const Icon(Icons.broken_image_outlined),
-                        ),
-                      ),
+                child: ImagenProductoOffline(
+                  uid: FirebaseAuthManager().uidActual,
+                  productoId: producto.id,
+                  imagenUrl: producto.imagenUrl,
+                ),
               ),
             ),
             const SizedBox(width: 12),
