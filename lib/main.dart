@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+
 import 'firebase_options.dart';
 import 'repositories/usuario_repository.dart';
 import 'screens/carrito_screen.dart';
@@ -8,6 +9,7 @@ import 'screens/lista_pedidos_screen.dart';
 import 'screens/lista_productos_screen.dart';
 import 'screens/menu_screen.dart';
 import 'screens/registro_producto_screen.dart';
+import 'sync/auto_sync_lifecycle.dart';
 
 /// Punto de entrada de Mi Market.
 ///
@@ -25,7 +27,7 @@ void main() async {
     debugPrint('Error al inicializar Firebase: $e');
   }
 
-  runApp(const MiMarketApp());
+  runApp(const AutoSyncLifecycle(child: MiMarketApp()));
 }
 
 /// Widget raiz de la aplicacion.

@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../local/imagenes_producto_locales.dart';
 import '../local/offline_store.dart';
 import '../models/producto_model.dart';
+import '../sync/producto_foto_sync_gateway.dart';
 
 /// Primera mitad del registro offline-first: SOLO almacenamiento local.
 ///
@@ -61,7 +62,9 @@ class RegistroProductoLocalService {
       actualizadoEn: ahora,
       // La URL definitiva solo se asigna cuando Firebase Storage responde.
       imagenUrl: '',
-      imagenRuta: '',
+      imagenRuta: fotografia == null
+          ? ''
+          : ProductoFotoSyncGateway.fotoLocalPendiente,
     );
 
     // La foto queda fuera de la cache temporal del selector ANTES de anotar

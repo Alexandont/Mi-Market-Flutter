@@ -132,4 +132,39 @@ void main() {
     expect(await store.obtenerProductos('usuario-A'), isEmpty);
     expect(await store.operacionesPendientes('usuario-A'), isEmpty);
   });
+
+  test(
+    'la fotografia elegida se marca como pendiente en SQLite y la outbox',
+    () async {
+      final origen = File(path.join(directorio.path, 'foto_marcador.jpg'));
+      await origen.writeAsBytes([0xff, 0xd8, 0xff, 0xd9], flush: true);
+      final creado = await registro.registrar(
+        'usuario-A',
+        muestra(),
+        fotografia: XFile(origen.path),
+      );
+      expect(creado.imagenRuta, 'local:pending');
+      expect(
+        (await store.obtenerProductos('usuario-A')).single.imagenRuta,
+        'local:pending',
+      );
+      expect(
+        (await store.operacionesPendientes('usuario-A'))
+            .single
+            .payload?['imagenRuta'],
+        'local:pending',
+      );
+    },
+  );
+
+  test('un producto sin fotografia no lleva marcador pendiente', () async {
+    final creado = await registro.registrar('usuario-A', muestra());
+    expect(creado.imagenRuta, isEmpty);
+    expect(
+      (await store.operacionesPendientes('usuario-A'))
+          .single
+          .payload?['imagenRuta'],
+      isEmpty,
+    );
+  });
 }
