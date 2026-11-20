@@ -1,7 +1,12 @@
 import 'package:image_picker/image_picker.dart';
+
 import '../firebase/firebase_auth_manager.dart';
 import '../firebase/firebase_storage_manager.dart';
 import '../firebase/firestore_repository.dart';
+import '../local/catalogo_cache_local.dart';
+import '../local/local_database_provider.dart';
+import '../local/offline_store.dart';
+import 'catalogo_offline_reader.dart';
 import '../models/carrito_provider.dart';
 import '../models/producto_model.dart';
 import '../network/api_response.dart';
@@ -29,11 +34,11 @@ class ProductoRepository {
     FirebaseStorageManager? storage,
     FirebaseAuthManager? auth,
     CarritoProvider? cache,
-  })  : _api = api ?? ApiService(),
-        _firestore = firestore ?? FirestoreRepository(),
-        _storage = storage ?? FirebaseStorageManager(),
-        _auth = auth ?? FirebaseAuthManager(),
-        _cache = cache ?? CarritoProvider();
+  }) : _api = api ?? ApiService(),
+       _firestore = firestore ?? FirestoreRepository(),
+       _storage = storage ?? FirebaseStorageManager(),
+       _auth = auth ?? FirebaseAuthManager(),
+       _cache = cache ?? CarritoProvider();
 
   /// Trae la lista de productos combinando el servidor REST y Firestore.
   ///
@@ -51,8 +56,10 @@ class ProductoRepository {
     if (combinados.isEmpty) {
       final cacheados = _cache.obtenerProductos();
       if (cacheados.isNotEmpty) {
-        return ApiResponse.exito(cacheados,
-            message: 'Mostrando los ultimos productos guardados sin conexion');
+        return ApiResponse.exito(
+          cacheados,
+          message: 'Mostrando los ultimos productos guardados sin conexion',
+        );
       }
       // Nada en ningun lado: si Firestore fallo, ese es el error a reportar.
       if (!deFirestore.isSuccess) {
@@ -61,23 +68,56 @@ class ProductoRepository {
           statusCode: deFirestore.statusCode,
         );
       }
-      return ApiResponse.exito(const <ProductoModel>[],
-          message: 'Todavia no hay productos registrados');
+      return ApiResponse.exito(
+        const <ProductoModel>[],
+        message: 'Todavia no hay productos registrados',
+      );
     }
 
     final unicos = _sinDuplicados(combinados);
     _cache.actualizarProductos(unicos);
 
-    return ApiResponse.exito(unicos,
-        message: 'Productos cargados desde el servidor REST y Firebase');
+    return ApiResponse.exito(
+      unicos,
+      message: 'Productos cargados desde el servidor REST y Firebase',
+    );
   }
 
-  /// Escucha los productos en tiempo real desde Firestore.
-  Stream<List<ProductoModel>> escucharProductos() {
-    return _firestore.escucharProductos().map((lista) {
+  /// Lee SQLite primero; actualiza la copia local solo con eventos fiables.
+  /// Las operaciones de escritura existentes no cambian en esta subetapa.
+  Stream<List<ProductoModel>> escucharProductos() => _escucharConSQLite();
+
+  Stream<List<ProductoModel>> _escucharConSQLite() async* {
+    final uid = _auth.uidActual;
+    if (uid.isEmpty) {
+      yield* _firestore.escucharProductos().map((lista) {
+        _cache.actualizarProductos(lista);
+        return lista;
+      });
+      return;
+    }
+
+    // Si SQLite no abre, conservar la lectura Firebase que ya funcionaba.
+    late final CatalogoOfflineReader lector;
+    try {
+      final db = await LocalDatabaseProvider.database;
+      lector = CatalogoOfflineReader(
+        cache: CatalogoCacheLocal(db),
+        store: OfflineStore(db),
+        fuente: FirebaseCatalogoFuente(),
+      );
+    } catch (_) {
+      yield* _firestore.escucharProductos().map((lista) {
+        _cache.actualizarProductos(lista);
+        return lista;
+      });
+      return;
+    }
+
+    await for (final lista in lector.observar(uid)) {
       _cache.actualizarProductos(lista);
-      return lista;
-    });
+      yield lista;
+    }
   }
 
   /// Registra un producto nuevo, subiendo primero la foto si la hay.
@@ -90,8 +130,10 @@ class ProductoRepository {
   ]) async {
     final uid = _auth.uidActual;
     if (uid.isEmpty) {
-      return ApiResponse.error('Debe iniciar sesion para registrar productos',
-          statusCode: 401);
+      return ApiResponse.error(
+        'Debe iniciar sesion para registrar productos',
+        statusCode: 401,
+      );
     }
 
     var porGuardar = producto.copyWith(creadorUid: uid);
@@ -123,8 +165,11 @@ class ProductoRepository {
     await _api.crearProducto(guardado.data!);
     _cache.agregarProducto(guardado.data!);
 
-    return ApiResponse.exito(guardado.data!,
-        message: 'Producto registrado', statusCode: 201);
+    return ApiResponse.exito(
+      guardado.data!,
+      message: 'Producto registrado',
+      statusCode: 201,
+    );
   }
 
   /// Actualiza un producto. Si llega una foto nueva, borra la anterior.
@@ -192,7 +237,8 @@ class ProductoRepository {
 
   /// Busca productos por nombre en el servidor REST y en Firestore.
   Future<ApiResponse<List<ProductoModel>>> buscarProductos(
-      String consulta) async {
+    String consulta,
+  ) async {
     final texto = consulta.trim();
     if (texto.isEmpty) return obtenerProductos();
 
@@ -207,12 +253,16 @@ class ProductoRepository {
     if (combinados.isEmpty) {
       // La busqueda de Firestore solo encuentra por prefijo; la cache busca
       // tambien dentro del texto, asi que a veces rescata resultados.
-      return ApiResponse.exito(_cache.buscarProductos(texto),
-          message: 'Busqueda local');
+      return ApiResponse.exito(
+        _cache.buscarProductos(texto),
+        message: 'Busqueda local',
+      );
     }
 
-    return ApiResponse.exito(_sinDuplicados(combinados),
-        message: 'Busqueda completada');
+    return ApiResponse.exito(
+      _sinDuplicados(combinados),
+      message: 'Busqueda completada',
+    );
   }
 
   /// Filtra por categoria.

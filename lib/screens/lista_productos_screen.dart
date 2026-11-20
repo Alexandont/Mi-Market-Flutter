@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/carrito_provider.dart';
 import '../models/producto_model.dart';
 import '../repositories/producto_repository.dart';
@@ -22,6 +23,13 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
 
   String _texto = '';
   String _categoria = 'Todas';
+  late final Stream<List<ProductoModel>> _flujoCatalogo;
+
+  @override
+  void initState() {
+    super.initState();
+    _flujoCatalogo = _productos.escucharProductos();
+  }
 
   @override
   void dispose() {
@@ -34,7 +42,8 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
     return lista.where((p) {
       final coincideCategoria =
           _categoria == 'Todas' || p.categoria == _categoria;
-      final coincideTexto = texto.isEmpty ||
+      final coincideTexto =
+          texto.isEmpty ||
           p.nombre.toLowerCase().contains(texto) ||
           p.descripcion.toLowerCase().contains(texto);
       return coincideCategoria && coincideTexto;
@@ -118,8 +127,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
                     ),
                     child: Text(
                       '$enCarrito',
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 10),
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
                     ),
                   ),
                 ),
@@ -181,7 +189,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
 
           Expanded(
             child: StreamBuilder<List<ProductoModel>>(
-              stream: _productos.escucharProductos(),
+              stream: _flujoCatalogo,
               builder: (contexto, instantanea) {
                 if (instantanea.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -263,7 +271,9 @@ class _TarjetaProducto extends StatelessWidget {
                 height: 72,
                 child: producto.imagenUrl.isEmpty
                     ? Container(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                         child: const Icon(Icons.image_not_supported_outlined),
                       )
                     : Image.network(
@@ -284,8 +294,10 @@ class _TarjetaProducto extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(producto.nombre,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    producto.nombre,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   if (producto.descripcion.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
@@ -303,12 +315,9 @@ class _TarjetaProducto extends StatelessWidget {
                     children: [
                       Text(
                         producto.precioFormateado,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
-                                color:
-                                    Theme.of(context).colorScheme.primary),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                       if (producto.categoria.isNotEmpty)
                         Chip(
