@@ -25,7 +25,7 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
 
   String _texto = '';
   String _categoria = 'Todas';
-  late final Stream<List<ProductoModel>> _flujoCatalogo;
+  late Stream<List<ProductoModel>> _flujoCatalogo;
 
   @override
   void initState() {
@@ -139,7 +139,15 @@ class _ListaProductosScreenState extends State<ListaProductosScreen> {
       ),
 
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/registro_producto'),
+        onPressed: () async {
+          final creado = await Navigator.pushNamed<dynamic>(
+            context,
+            '/registro_producto',
+          );
+          if (mounted && creado == true) {
+            setState(() => _flujoCatalogo = _productos.escucharProductos());
+          }
+        },
         icon: const Icon(Icons.add),
         label: const Text('Nuevo'),
       ),

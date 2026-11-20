@@ -1,6 +1,8 @@
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../models/producto_model.dart';
 import '../repositories/producto_repository.dart';
 
@@ -13,8 +15,7 @@ class RegistroProductoScreen extends StatefulWidget {
   const RegistroProductoScreen({super.key});
 
   @override
-  State<RegistroProductoScreen> createState() =>
-      _RegistroProductoScreenState();
+  State<RegistroProductoScreen> createState() => _RegistroProductoScreenState();
 }
 
 class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
@@ -59,9 +60,9 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo abrir la imagen: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo abrir la imagen: $e')));
     }
   }
 
@@ -123,10 +124,10 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
     if (!mounted) return;
 
     if (respuesta.isSuccess) {
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Producto registrado')),
+        SnackBar(content: Text(respuesta.message ?? 'Producto registrado')),
       );
+      Navigator.pop(context, true);
       return;
     }
 
@@ -166,8 +167,11 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
                           ? Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_a_photo_outlined,
-                                    size: 40, color: colores.outline),
+                                Icon(
+                                  Icons.add_a_photo_outlined,
+                                  size: 40,
+                                  color: colores.outline,
+                                ),
                                 const SizedBox(height: 8),
                                 const Text('Toque para agregar una foto'),
                               ],
@@ -211,8 +215,7 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
                       prefixIcon: Icon(Icons.category_outlined),
                     ),
                     items: ProductoModel.categorias
-                        .map((c) =>
-                            DropdownMenuItem(value: c, child: Text(c)))
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                         .toList(),
                     onChanged: (valor) {
                       if (valor != null) setState(() => _categoria = valor);
@@ -226,14 +229,16 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
                         child: TextFormField(
                           controller: _precio,
                           keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                            decimal: true,
+                          ),
                           decoration: const InputDecoration(
                             labelText: 'Precio',
                             prefixText: 'S/ ',
                           ),
                           validator: (valor) {
                             final numero = double.tryParse(
-                                (valor ?? '').replaceAll(',', '.'));
+                              (valor ?? '').replaceAll(',', '.'),
+                            );
                             if (numero == null) return 'Precio invalido';
                             if (numero <= 0) return 'Debe ser mayor que cero';
                             return null;
@@ -245,9 +250,7 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
                         child: TextFormField(
                           controller: _stock,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Stock',
-                          ),
+                          decoration: const InputDecoration(labelText: 'Stock'),
                           validator: (valor) {
                             final numero = int.tryParse(valor ?? '');
                             if (numero == null) return 'Cantidad invalida';
@@ -267,12 +270,14 @@ class _RegistroProductoScreenState extends State<RegistroProductoScreen> {
                             height: 18,
                             width: 18,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
                         : const Icon(Icons.save_outlined),
-                    label: Text(_guardando
-                        ? 'Guardando en Firebase'
-                        : 'Guardar producto'),
+                    label: Text(
+                      _guardando ? 'Guardando producto' : 'Guardar producto',
+                    ),
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),

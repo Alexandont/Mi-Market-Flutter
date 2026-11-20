@@ -1,4 +1,8 @@
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:image_picker/image_picker.dart';
+
+import 'registro_producto_offline.dart' as registro_offline;
 
 import '../firebase/firebase_auth_manager.dart';
 import '../firebase/firebase_storage_manager.dart';
@@ -134,6 +138,28 @@ class ProductoRepository {
         'Debe iniciar sesion para registrar productos',
         statusCode: 401,
       );
+    }
+
+    // Android/iOS: escribir primero SQLite y conservar la fotografia.
+    // NO enviar a Firebase hasta que exista sincronizacion de imagen+documento.
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      try {
+        final local = await registro_offline.registrarProductoLocal(
+          uid,
+          producto,
+          imagen,
+        );
+        _cache.agregarProducto(local);
+        return ApiResponse.exito(
+          local,
+          message: 'Guardado en el dispositivo. Pendiente de sincronizacion',
+          statusCode: 201,
+        );
+      } catch (e) {
+        return ApiResponse.error('No se pudo guardar localmente: $e');
+      }
     }
 
     var porGuardar = producto.copyWith(creadorUid: uid);
